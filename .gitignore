@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+
+# Data, weights and generated outputs
+data/*
+!data/.gitkeep
+models/*
+!models/.gitkeep
+outputs/
+*.pt
+
+# Local-only notes
+.env
+
+# OS / editors
+.DS_Store
+.vscode/
+.idea/
