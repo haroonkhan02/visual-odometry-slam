@@ -83,7 +83,7 @@ SEQUENCES = {
         SequenceInfo("rgbd_dataset_freiburg1_desk", "fr1", 344_011_403,
                      "hand-held sweep over a desk, fast rotation"),
         SequenceInfo("rgbd_dataset_freiburg1_room", "fr1", 782_381_450,
-                     "whole office room, returns to the start (loop)"),
+                     "whole office room, crosses its own path (revisits)"),
         SequenceInfo("rgbd_dataset_freiburg3_long_office_household", "fr3", 1_483_556_251,
                      "long loop around two desks (loop closure test)"),
     )

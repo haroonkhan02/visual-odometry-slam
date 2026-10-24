@@ -1,0 +1,58 @@
+{
+  "fr1_xyz": {
+    "frames": 792,
+    "frames_with_gt": 790,
+    "duration_s": 26.6,
+    "fps": 31.1,
+    "max_frame_gap_s": 0.068,
+    "path_length_m": 8.01,
+    "total_rotation_deg": 458,
+    "mean_speed_m_s": 0.301,
+    "p95_step_cm": 1.74,
+    "p95_step_deg": 1.25,
+    "start_end_distance_m": 0.21,
+    "depth_valid_fraction": 0.76
+  },
+  "fr1_desk": {
+    "frames": 573,
+    "frames_with_gt": 573,
+    "duration_s": 19.8,
+    "fps": 31.1,
+    "max_frame_gap_s": 0.068,
+    "path_length_m": 9.31,
+    "total_rotation_deg": 680,
+    "mean_speed_m_s": 0.469,
+    "p95_step_cm": 2.87,
+    "p95_step_deg": 2.54,
+    "start_end_distance_m": 0.96,
+    "depth_valid_fraction": 0.749
+  },
+  "fr1_room": {
+    "frames": 1352,
+    "frames_with_gt": 1352,
+    "duration_s": 45.3,
+    "fps": 31.2,
+    "max_frame_gap_s": 0.068,
+    "path_length_m": 15.97,
+    "total_rotation_deg": 1822,
+    "mean_speed_m_s": 0.352,
+    "p95_step_cm": 2.12,
+    "p95_step_deg": 2.6,
+    "start_end_distance_m": 1.87,
+    "depth_valid_fraction": 0.76
+  },
+  "fr3_long_office_household": {
+    "frames": 2488,
+    "frames_with_gt": 2486,
+    "duration_s": 87.1,
+    "fps": 31.1,
+    "max_frame_gap_s": 0.1,
+    "path_length_m": 22.14,
+    "total_rotation_deg": 1212,
+    "mean_speed_m_s": 0.254,
+    "p95_step_cm": 1.57,
+    "p95_step_deg": 1.0,
+    "start_end_distance_m": 0.75,
+    "depth_valid_fraction": 0.829
+  }
+}

@@ -15,7 +15,7 @@ Work in progress. The data pipeline, the TUM file formats, frame association and
 
 ## Planned approach
 
-- Data: four sequences of the [TUM RGB-D benchmark](https://cvg.cit.tum.de/data/datasets/rgbd-dataset) (CC BY 4.0, 640x480 at 30 Hz, motion-capture ground truth at 100 Hz): `fr1_xyz`, `fr1_desk`, `fr1_room` and `fr3_long_office_household`. The last two return to their start, which is what loop closure needs.
+- Data: four sequences of the [TUM RGB-D benchmark](https://cvg.cit.tum.de/data/datasets/rgbd-dataset) (CC BY 4.0, 640x480 at 30 Hz, motion-capture ground truth at 100 Hz): `fr1_xyz`, `fr1_desk`, `fr1_room` and `fr3_long_office_household`. `fr3_long_office_household` circles two desks and ends 0.75 m from its start, and `fr1_room` crosses its own path several times; revisits like these are what loop closure needs ([statistics](reports/dataset_stats.md)).
 - Monocular VO: ORB features, essential matrix with RANSAC, pose recovery and triangulation. Scale is unobservable from one camera, so it is evaluated after a similarity (Sim3) alignment.
 - RGB-D VO: the same features lifted to 3-D with the depth image, then PnP with RANSAC, which gives metric scale directly.
 - Metrics: absolute trajectory error (ATE RMSE) and relative pose error (RPE per second), as defined by the TUM benchmark.
