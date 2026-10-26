@@ -1,0 +1,9 @@
+{
+  "frames": 792,
+  "failures": 0,
+  "keyframes": 116,
+  "median_inliers": 347,
+  "mode": "rgbd-kf",
+  "seconds": 14.0,
+  "fps": 56.5
+}
