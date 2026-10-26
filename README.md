@@ -11,7 +11,22 @@ Estimating a hand-held camera's path from its images alone: feature-based monocu
 
 </div>
 
-Work in progress. The data pipeline, the TUM file formats, frame association and the trajectory metrics (ATE with Umeyama alignment, RPE) are in place and tested. The odometry front end comes next, then results, drift analysis and loop closure.
+Work in progress. RGB-D and monocular odometry run on all four sequences and are scored below. Monocular tracking still loses the camera on fast motion and has no bundle adjustment yet. Next: error analysis, loop closure with pose-graph optimisation, and a demo.
+
+## First results
+
+ATE is the RMSE of camera positions after alignment to motion capture (SE3 for RGB-D, Sim3 for monocular because its scale is unknown). RPE is over 1 s windows. Full table with frame-to-frame RGB-D and run statistics: [reports/vo_results.md](reports/vo_results.md).
+
+| Sequence | Path (m) | RGB-D ATE (cm) | RGB-D RPE (cm/s, °/s) | Mono ATE (cm) | Mono lost |
+|---|---|---|---|---|---|
+| fr1_xyz | 8.0 | 4.8 | 2.2, 1.32 | 10.8 | 2 |
+| fr1_desk | 9.3 | 8.5 | 3.2, 2.07 | 67.7 | 6 |
+| fr1_room | 16.0 | 17.9 | 5.2, 2.26 | 53.6 | 31 |
+| fr3_long_office_household | 22.1 | 19.2 | 1.7, 0.80 | 148.3 | 2 |
+
+![Estimated vs ground-truth paths](reports/figures/trajectories.png)
+
+RGB-D odometry with keyframes never lost tracking and runs at about 56 frames/s in one process on an Apple M5 CPU. Tracking against a keyframe instead of the previous frame lowered ATE on every sequence (fr3: 57.6 → 19.2 cm), because fewer small errors are chained together. Local error stays small (0.8–2.3 °/s), but it adds up over a long loop, which is what loop closure should fix. Monocular odometry is usable on the slow fr1_xyz only. On fr1_desk and fr1_room fast rotation breaks tracking, and every re-initialisation guesses a new scale. Its parameters were tuned on fr1_xyz alone, so the other three sequences are untouched test data.
 
 ## Planned approach
 
@@ -42,6 +57,8 @@ uv pip install -e ".[dev]"
 
 vo-download              # four TUM sequences, ~3.1 GB of archives, resumable
 vo-check                 # sequence statistics -> reports/dataset_stats.md
+vo-run                   # RGB-D (frame-to-frame, keyframe) and mono on every sequence, ~5 min
+vo-eval                  # ATE / RPE -> reports/vo_results.md and figures
 pytest && ruff check .   # synthetic data only, no download needed
 ```
 
@@ -57,9 +74,15 @@ visual-odometry-slam/
 │   ├── tum.py            # TUM file formats, timestamp association, sequence loader
 │   ├── geometry.py       # quaternions, SE(3) poses, rotation angles
 │   ├── metrics.py        # Umeyama alignment, ATE, RPE
+│   ├── features.py       # gridded ORB, undistortion, mutual ratio-test matching
+│   ├── estimation.py     # PnP, essential matrix, triangulation (OpenCV)
+│   ├── rgbd_vo.py        # depth-lifted keypoints + PnP, keyframe tracking
+│   ├── mono_vo.py        # two-view init, PnP on a triangulated keyframe map
+│   ├── run.py            # vo-run: trajectories in TUM format
+│   ├── evaluate.py       # vo-eval: ATE / RPE tables and plots
 │   └── dataset_stats.py  # vo-check: sequence statistics and trajectory plot
-├── tests/                # synthetic sequences and trajectories
-├── reports/              # generated statistics and figures
+├── tests/                # synthetic point clouds and rendered textured walls
+├── reports/              # results, figures, estimated trajectories
 └── data/                 # datasets (git-ignored)
 ```
 
