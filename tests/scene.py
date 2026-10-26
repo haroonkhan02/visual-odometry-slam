@@ -45,24 +45,39 @@ def texture(size: int = 1600, seed: int = 0) -> np.ndarray:
     return cv2.GaussianBlur(img, (3, 3), 0)
 
 
-def render_wall(tex: np.ndarray, T_wc: np.ndarray, cam: Camera = CAM, wall_z: float = 2.5,
-                metres: float = 4.0) -> tuple[np.ndarray, np.ndarray]:
-    """Grey image and depth (m) of a textured wall at world z = wall_z, centred on the z axis.
+def _render_plane(tex: np.ndarray, T_wc: np.ndarray, cam: Camera, z: float, x0: float,
+                  y0: float, size: float) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Image, depth and coverage mask of a textured square at world z = z.
 
-    The wall spans `metres` x `metres`; texture pixel (u, v) sits at world
-    ((u - c) * s, (v - c) * s, wall_z), so the image is a homography of the texture.
+    The square spans [x0, x0 + size] x [y0, y0 + size]; texture pixel (u, v) sits at world
+    (x0 + u * s, y0 + v * s, z), so the image is a homography of the texture.
     """
-    s = metres / tex.shape[1]
-    c = tex.shape[1] / 2
+    s = size / tex.shape[1]
     T_cw = invert(T_wc)
     R, t = T_cw[:3, :3], T_cw[:3, 3]
-    # world point = A @ [u, v, 1]
-    A = np.array([[s, 0, -c * s], [0, s, -c * s], [0, 0, wall_z]])
+    A = np.array([[s, 0, x0], [0, s, y0], [0, 0, z]])  # world point = A @ [u, v, 1]
     H = cam.K @ (R @ A + np.outer(t, [0, 0, 1]))
-    gray = cv2.warpPerspective(tex, H, (cam.width, cam.height), flags=cv2.INTER_LINEAR)
-    # depth: intersect each pixel ray with the plane z = wall_z
+    size_px = (cam.width, cam.height)
+    gray = cv2.warpPerspective(tex, H, size_px, flags=cv2.INTER_LINEAR)
+    mask = cv2.warpPerspective(np.full(tex.shape, 255, np.uint8), H, size_px,
+                               flags=cv2.INTER_NEAREST) > 0
     u, v = np.meshgrid(np.arange(cam.width), np.arange(cam.height))
     rays = np.stack([(u - cam.cx) / cam.fx, (v - cam.cy) / cam.fy, np.ones_like(u, float)], -1)
     dirs = rays @ T_wc[:3, :3].T
-    lam = (wall_z - T_wc[2, 3]) / dirs[..., 2]
-    return gray, lam.astype(np.float32)
+    lam = (z - T_wc[2, 3]) / dirs[..., 2]  # depth along the optical axis (ray has z = 1)
+    return gray, lam.astype(np.float32), mask
+
+
+def render_wall(tex: np.ndarray, T_wc: np.ndarray, cam: Camera = CAM, wall_z: float = 2.5,
+                metres: float = 4.0) -> tuple[np.ndarray, np.ndarray]:
+    """Grey image and depth (m) of a textured wall at world z = wall_z with a panel 1.2 m in
+    front of it, left of centre.
+
+    The panel matters: from a single plane, a small sideways move and a small pan look
+    almost the same, which makes pose errors depend on numerical details of the platform.
+    """
+    gray, depth, _ = _render_plane(tex, T_wc, cam, wall_z, -metres / 2, -metres / 2, metres)
+    near = np.ascontiguousarray(tex[::-1, ::-1])  # a different-looking texture
+    g2, d2, m2 = _render_plane(near, T_wc, cam, wall_z - 1.2, -0.7, -0.5, 0.8)
+    gray[m2], depth[m2] = g2[m2], d2[m2]
+    return gray, depth

@@ -35,8 +35,8 @@ def test_rgbd_odometry_follows_a_rendered_camera_path():
         vo = RgbdOdometry(CAM, keyframes=keyframes)
         est = [vo.track(*render_wall(tex, T)) for T in truth]
         assert vo.stats.failures == 0
-        # A flat wall cannot tell a small sideways move from a small pan (5 mm ~ 0.11 deg at
-        # 2.5 m), so errors of a few mm are expected; a sign or frame bug gives centimetres.
+        # Frame-to-frame chains 14 small errors (up to ~5 mm here, keyframes ~1 mm); a sign or
+        # frame bug gives centimetres.
         for T, E in zip(truth, est, strict=True):
             assert np.linalg.norm(T[:3, 3] - E[:3, 3]) < 0.01
             assert np.degrees(rotation_angle(T[:3, :3].T @ E[:3, :3])) < 0.25

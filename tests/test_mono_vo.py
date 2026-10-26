@@ -26,10 +26,10 @@ def test_mono_odometry_tracks_up_to_scale(tex):
     assert vo.stats.inits == 1 and vo.stats.losses == 0
     assert vo.stats.untracked == 0  # frames before initialisation were located afterwards
     res = ate(np.array(truth), est, with_scale=True)
-    assert res.rmse < 0.04  # on a 0.67 m path; a flat wall is a weak scene for one camera
+    assert res.rmse < 0.03  # on a 0.67 m path
     assert res.scale > 0
     # The unit is arbitrary, but it is one unit: the second half of the constant-speed path is
-    # about as long as the first (single steps jitter on a flat wall, so compare windows)
+    # about as long as the first (single steps jitter, so compare windows)
     first = np.linalg.norm(est[16, :3, 3] - est[3, :3, 3])
     second = np.linalg.norm(est[29, :3, 3] - est[16, :3, 3])
     assert 0.75 < second / first < 1.33
