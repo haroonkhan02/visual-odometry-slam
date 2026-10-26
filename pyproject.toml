@@ -25,6 +25,8 @@ dev = ["pytest>=8", "ruff>=0.6"]
 [project.scripts]
 vo-download = "vo_slam.download:main"
 vo-check = "vo_slam.dataset_stats:main"
+vo-run = "vo_slam.run:main"
+vo-eval = "vo_slam.evaluate:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
