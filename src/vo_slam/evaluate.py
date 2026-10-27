@@ -18,6 +18,7 @@ from pathlib import Path
 import numpy as np
 
 from .config import REPORTS_DIR, SEQUENCES, TUM_DIR
+from .geometry import invert, rotation_angle
 from .metrics import ate, rpe, rpe_pairs
 from .run import MODES, TRAJ_DIR
 from .tum import associate, read_trajectory
@@ -44,6 +45,30 @@ def evaluate(gt_stamps: np.ndarray, gt_poses: np.ndarray, est_stamps: np.ndarray
     }
 
 
+def loop_accuracy(gt_stamps: np.ndarray, gt_poses: np.ndarray, est_stamps: np.ndarray,
+                  loop_edges: list[list[float]]) -> dict:
+    """How far each measured loop transform is from the ground-truth relative pose.
+
+    `loop_edges` rows are [frame_a, frame_b, 12 values of T_ab[:3]] as written by vo-run.
+    A wrong (false-positive) loop shows up as an error of decimetres or more.
+    """
+    gt_of = dict(associate(est_stamps, gt_stamps))
+    t_err, r_err = [], []
+    for row in loop_edges:
+        a, b = int(row[0]), int(row[1])
+        if a not in gt_of or b not in gt_of:
+            continue
+        T = np.vstack([np.reshape(row[2:], (3, 4)), [0, 0, 0, 1]])
+        E = invert(invert(gt_poses[gt_of[a]]) @ gt_poses[gt_of[b]]) @ T
+        t_err.append(np.linalg.norm(E[:3, 3]))
+        r_err.append(np.degrees(rotation_angle(E[:3, :3])))
+    if not t_err:
+        return {"loops_scored": 0}
+    return {"loops_scored": len(t_err), "loop_err_median_cm": 100 * float(np.median(t_err)),
+            "loop_err_max_cm": 100 * float(np.max(t_err)),
+            "loop_err_max_deg": float(np.max(r_err))}
+
+
 def plot(results: dict[str, dict[str, dict]], out_dir: Path) -> None:
     import matplotlib
 
@@ -51,7 +76,8 @@ def plot(results: dict[str, dict[str, dict]], out_dir: Path) -> None:
     import matplotlib.pyplot as plt
 
     seqs = list(results)
-    colors = {"rgbd-f2f": "tab:orange", "rgbd-kf": "tab:blue", "mono": "tab:red"}
+    colors = {"rgbd-f2f": "tab:orange", "rgbd-kf": "tab:blue", "rgbd-slam": "tab:green",
+              "mono": "tab:red"}
     fig, axes = plt.subplots(1, len(seqs), figsize=(4.2 * len(seqs), 4.4), squeeze=False)
     for ax, s in zip(axes[0], seqs, strict=True):
         first = next(iter(results[s].values()))
@@ -95,10 +121,12 @@ def to_markdown(results: dict[str, dict[str, dict]], runs: dict[str, dict[str, d
         "unknown). RPE and drift over 1 s windows; drift = translation error / distance "
         "travelled in that window, windows under 5 cm of motion skipped. *Failed*: frames "
         "with no pose from PnP (RGB-D: constant-velocity guess; mono: copy of the previous "
-        "pose). *Lost*: mono re-initialisations. FPS includes reading the PNGs.", "",
+        "pose). *Lost*: mono re-initialisations. *Loops*: loop edges in the pose graph "
+        "(rgbd-slam). FPS includes reading the PNGs and, for rgbd-slam, the loop search and "
+        "optimisation.", "",
         "| Sequence | Mode | ATE RMSE (cm) | ATE max (cm) | RPE (cm/s) | RPE (°/s) | Drift (%) "
-        "| Keyframes | Failed | Lost | FPS |",
-        "|---|---|---|---|---|---|---|---|---|---|---|",
+        "| Keyframes | Failed | Lost | Loops | FPS |",
+        "|---|---|---|---|---|---|---|---|---|---|---|---|",
     ]
     for s, by_mode in results.items():
         for mode, r in by_mode.items():
@@ -108,9 +136,18 @@ def to_markdown(results: dict[str, dict[str, dict]], runs: dict[str, dict[str, d
                 f"{100 * r['rpe_trans_m_per_s']:.1f} | {r['rpe_rot_deg_per_s']:.2f} | "
                 f"{r['drift_pct']:.1f} | {st['keyframes']} | "
                 f"{st.get('failures', st.get('failed', 0))} | {st.get('losses', '–')} | "
-                f"{st['fps']:.0f} |")
+                f"{st.get('loops', '–')} | {st['fps']:.0f} |")
     lines += ["", "Monocular Sim3 scale (estimate units → metres): " + ", ".join(
         f"{s} {r['mono']['sim3_scale']:.2f}" for s, r in results.items() if "mono" in r) + "."]
+    loops = [(s, r["rgbd-slam"]) for s, r in results.items()
+             if r.get("rgbd-slam", {}).get("loops_scored")]
+    if loops:
+        lines += ["", "Loop edges checked against ground truth (error of the measured relative "
+                  "pose; a false loop would be off by decimetres):", "",
+                  "| Sequence | Loops | Median error (cm) | Max error (cm) | Max error (°) |",
+                  "|---|---|---|---|---|"]
+        lines += [f"| {s} | {r['loops_scored']} | {r['loop_err_median_cm']:.1f} | "
+                  f"{r['loop_err_max_cm']:.1f} | {r['loop_err_max_deg']:.1f} |" for s, r in loops]
     return "\n".join(lines) + "\n"
 
 
@@ -131,7 +168,10 @@ def main(argv: list[str] | None = None) -> None:
             gt_t, gt_p = read_trajectory(args.data_dir / info.name / "groundtruth.txt")
             est_t, est_p = read_trajectory(path)
             results.setdefault(s, {})[mode] = evaluate(gt_t, gt_p, est_t, est_p, mode == "mono")
-            runs.setdefault(s, {})[mode] = json.loads(path.with_suffix(".json").read_text())
+            run = json.loads(path.with_suffix(".json").read_text())
+            if "loop_edges" in run:
+                results[s][mode] |= loop_accuracy(gt_t, gt_p, est_t, run.pop("loop_edges"))
+            runs.setdefault(s, {})[mode] = run
     if not results:
         raise SystemExit(f"No trajectories in {args.traj_dir}; run vo-run first.")
     clean = {s: {m: {k: v for k, v in r.items() if not k.startswith("_")} | runs[s][m]

@@ -40,6 +40,17 @@ def lift(frame: Frame, depth: np.ndarray, cam: Camera, min_depth: float = 0.3,
 
 
 @dataclass
+class Keyframe:
+    """A reference frame kept for loop closure: its features, 3-D points and odometry pose."""
+
+    index: int  # frame index in the sequence
+    frame: Frame
+    pts3d: np.ndarray
+    pose: np.ndarray
+    lost: bool = False  # created after a tracking failure: its link to the previous one is a guess
+
+
+@dataclass
 class TrackStats:
     frames: int = 0
     failures: int = 0  # frames where PnP found no pose (constant-velocity guess used)
@@ -63,6 +74,9 @@ class RgbdOdometry:
         self.ref: tuple[Frame, np.ndarray, np.ndarray] | None = None  # frame, 3-D pts, pose
         self.ref_first_inliers = 0
         self.poses: list[np.ndarray] = []
+        self.keyframe_list: list[Keyframe] = []
+        # per frame: (keyframe id, T_kf_frame), so poses can be rebuilt after the graph moves
+        self.frame_refs: list[tuple[int, np.ndarray]] = []
 
     def track(self, gray: np.ndarray, depth: np.ndarray) -> np.ndarray:
         frame = self.extract(gray)
@@ -71,8 +85,7 @@ class RgbdOdometry:
         if self.ref is None:
             pose = np.eye(4)
             self._set_ref(frame, pts3d, pose, 0)
-            self.poses.append(pose)
-            return pose
+            return self._record(pose, new_kf=True)
         ref_frame, ref_pts, ref_pose = self.ref
         est = self._solve(ref_frame, ref_pts, frame)
         if est is None:
@@ -80,7 +93,8 @@ class RgbdOdometry:
             self.stats.failures += 1
             self.stats.inliers.append(0)
             pose = self._constant_velocity()
-            self._set_ref(frame, pts3d, pose, 0)
+            self._set_ref(frame, pts3d, pose, 0, lost=True)
+            return self._record(pose, new_kf=True)
         else:
             T_cur_ref, n = est
             self.stats.inliers.append(n)
@@ -90,6 +104,13 @@ class RgbdOdometry:
             weak = n < self.kf_min_inliers or n < self.kf_min_ratio * self.ref_first_inliers
             if not self.keyframes or weak:
                 self._set_ref(frame, pts3d, pose, 0)
+                return self._record(pose, new_kf=True)
+        return self._record(pose, new_kf=False)
+
+    def _record(self, pose: np.ndarray, new_kf: bool) -> np.ndarray:
+        kf = len(self.keyframe_list) - 1
+        rel = np.eye(4) if new_kf else invert(self.keyframe_list[kf].pose) @ pose
+        self.frame_refs.append((kf, rel))
         self.poses.append(pose)
         return pose
 
@@ -102,10 +123,12 @@ class RgbdOdometry:
         est = pnp(ref_pts[m[:, 0]], cur.pts[m[:, 1]], self.cam.K, self.threshold_px)
         return None if est is None else (est.T, est.n_inliers)
 
-    def _set_ref(self, frame: Frame, pts3d: np.ndarray, pose: np.ndarray, n: int) -> None:
+    def _set_ref(self, frame: Frame, pts3d: np.ndarray, pose: np.ndarray, n: int,
+                 lost: bool = False) -> None:
         self.ref = (frame, pts3d, pose)
         self.ref_first_inliers = n
         self.stats.keyframes += 1
+        self.keyframe_list.append(Keyframe(self.stats.frames - 1, frame, pts3d, pose, lost))
 
     def _constant_velocity(self) -> np.ndarray:
         if len(self.poses) < 2:

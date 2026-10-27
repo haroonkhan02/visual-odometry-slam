@@ -3,6 +3,7 @@
 Modes:
     rgbd-f2f   RGB-D, every frame tracked against the previous frame
     rgbd-kf    RGB-D, frames tracked against a keyframe until the inliers thin out
+    rgbd-slam  rgbd-kf plus loop closure and pose-graph optimisation (batch, after tracking)
     mono       monocular (grey images only), scale fixed once at initialisation
 
 Example:
@@ -26,9 +27,10 @@ from tqdm import tqdm
 from .config import REPORTS_DIR, SEQUENCES, TUM_DIR
 from .mono_vo import MonoOdometry
 from .rgbd_vo import RgbdOdometry
+from .slam import close_loops
 from .tum import TumSequence, write_trajectory
 
-MODES = ("rgbd-f2f", "rgbd-kf", "mono")
+MODES = ("rgbd-f2f", "rgbd-kf", "rgbd-slam", "mono")
 TRAJ_DIR = REPORTS_DIR / "trajectories"
 
 
@@ -44,10 +46,21 @@ def run_sequence(seq: TumSequence, mode: str, progress: bool = False) -> tuple[n
             vo.track(seq.gray(i))
         poses = vo.trajectory()
     else:
-        vo = RgbdOdometry(seq.camera, keyframes=mode == "rgbd-kf")
+        vo = RgbdOdometry(seq.camera, keyframes=mode != "rgbd-f2f")
         poses = np.array([vo.track(seq.gray(i), seq.depth(i)) for i in frames])
+        if mode == "rgbd-slam":
+            t1 = time.perf_counter()
+            poses, slam = close_loops(vo, seq.stamps)
+            loop_stats = {"loop_candidates": slam.candidates, "loops_verified": slam.loops_verified,
+                          "loops": slam.loops_kept,
+                          "loop_seconds": round(time.perf_counter() - t1, 1),
+                          "loop_edges": [[int(a), int(b), *np.round(T[:3].ravel(), 6).tolist()]
+                                         for (a, b), T in zip(slam.loop_pairs, slam.loop_T,
+                                                              strict=True)]}
     seconds = time.perf_counter() - t0
     stats = {k: v for k, v in asdict(vo.stats).items() if k != "inliers"}
+    if mode == "rgbd-slam":
+        stats |= loop_stats
     if mode != "mono":
         stats["median_inliers"] = int(np.median(vo.stats.inliers))
     stats |= {"mode": mode, "seconds": round(seconds, 1), "fps": round(len(seq) / seconds, 1)}
@@ -61,7 +74,8 @@ def _job(args: tuple[str, str, Path, Path]) -> str:
     write_trajectory(out_dir / f"{short}_{mode}.txt", seq.stamps, poses)
     (out_dir / f"{short}_{mode}.json").write_text(json.dumps(stats, indent=2) + "\n")
     return f"{short:28s} {mode:9s} {stats['fps']:5.1f} fps  " + json.dumps(
-        {k: v for k, v in stats.items() if k not in ("mode", "fps", "seconds")})
+        {k: v for k, v in stats.items()
+         if k not in ("mode", "fps", "seconds", "loop_edges")})
 
 
 def main(argv: list[str] | None = None) -> None:
