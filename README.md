@@ -46,7 +46,7 @@ Four sequences of the [TUM RGB-D benchmark](https://cvg.cit.tum.de/data/datasets
 
 ![Estimated vs ground-truth paths](reports/figures/trajectories.png)
 
-Loop closure cut ATE by 51–71 % on every sequence. None of the 101 accepted loop edges was a false match: each one agrees with the ground-truth relative pose to within 5.2 cm and 3.2°. It fixes accumulated drift, not local error: RPE per second is almost unchanged. The whole RGB-D SLAM pipeline runs at 45–50 frames/s in one process on an Apple M5 CPU, including the loop search. Monocular odometry is usable only on the slow fr1_xyz; its parameters were tuned on that sequence alone, so the other three are untouched test data.
+Loop closure cut ATE by 51–70 % on every sequence. None of the 101 accepted loop edges was a false match: each one agrees with the ground-truth relative pose to within 5.2 cm and 3.2°. It fixes accumulated drift, not local error: RPE per second is almost unchanged. The whole RGB-D SLAM pipeline runs at 45–50 frames/s in one process on an Apple M5 CPU, including the loop search. Monocular odometry is usable only on the slow fr1_xyz; its parameters were tuned on that sequence alone, so the other three are untouched test data.
 
 ### Where the error comes from
 
