@@ -28,6 +28,7 @@ vo-check = "vo_slam.dataset_stats:main"
 vo-run = "vo_slam.run:main"
 vo-eval = "vo_slam.evaluate:main"
 vo-analyse = "vo_slam.analysis:main"
+vo-demo = "vo_slam.demo:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
